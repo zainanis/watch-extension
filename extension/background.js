@@ -12,24 +12,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     forwardUserAction(request, sender.tab.id);
   }
 
+  if (request.action === "leftRoomUrl") {
+    // User left the room URL - notify popup to leave room
+    chrome.runtime.sendMessage({
+      action: "userLeftRoomUrl",
+      roomUrl: request.roomUrl,
+      currentUrl: request.currentUrl,
+    }).catch(() => {});
+  }
+
   if (request.action === "getVideoStatus") {
     sendResponse({ received: true });
   }
 });
 
 async function forwardUserAction(action, senderTabId) {
-  // Send to backend via popup (which maintains connection)
-  const tabs = await chrome.tabs.query({
-    url: "chrome-extension://*/popup.html",
+  // Send to popup (if open) so it can forward user actions to the WebSocket backend.
+  chrome.runtime.sendMessage({
+    action: 'broadcastUserAction',
+    data: action,
+  }, () => {
+    if (chrome.runtime.lastError) {
+      console.warn('Popup is not open or not listening yet:', chrome.runtime.lastError.message);
+    }
   });
-
-  if (tabs.length > 0) {
-    // If popup is open, send through it
-    chrome.tabs
-      .sendMessage(tabs[0].id, {
-        action: "broadcastUserAction",
-        data: action,
-      })
-      .catch(() => {});
-  }
 }

@@ -1,11 +1,35 @@
 const CONFIG = {
-  backendUrl: "ws://localhost:3000",
+  backendUrl: "ws://web-production-5437b.up.railway.app",
 };
 
 let ws = null;
 let roomCode = null;
 let isConnected = false;
 let userName = null;
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "broadcastUserAction") {
+    if (ws && isConnected) {
+      ws.send(
+        JSON.stringify({
+          type: "userAction",
+          roomCode: roomCode,
+          userName: userName,
+          actionType: request.data.type,
+          time: request.data.currentTime,
+          playing: request.data.type === "play",
+        }),
+      );
+    }
+  }
+
+  if (request.action === "userLeftRoomUrl") {
+    // User navigated away from room URL - leave room automatically
+    console.log("User left room URL, leaving room");
+    leaveRoom();
+    showStatus("Left room (navigated away from video page)", "info");
+  }
+});
 
 document.addEventListener("DOMContentLoaded", async () => {
   // Restore state from storage
@@ -110,6 +134,14 @@ function handleMessage(message) {
       showConnected(message.roomCode);
       showStatus("Connected!", "success");
       updateMemberCount(message.memberCount);
+
+      // If room has a URL, navigate to it immediately
+      if (message.roomUrl) {
+        setTimeout(() => {
+          navigateToUrl(message.roomUrl);
+          showStatus("Navigating to room video page...", "info");
+        }, 1000); // Small delay to let UI update
+      }
       break;
 
     case "memberUpdate":
@@ -118,6 +150,13 @@ function handleMessage(message) {
 
     case "startCountdown":
       startCountdown(5);
+      break;
+
+    case "urlSync":
+      if (message.url) {
+        navigateToUrl(message.url);
+        showStatus("Navigating to the room video page…", "info");
+      }
       break;
 
     case "playSync":
@@ -197,16 +236,19 @@ function startCountdown(seconds) {
 function syncNow() {
   if (!ws || !isConnected) return;
 
-  // Request sync from all members
-  ws.send(
-    JSON.stringify({
-      type: "requestSync",
-      roomCode: roomCode,
-      userName: userName,
-    }),
-  );
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const currentUrl = tabs?.[0]?.url || null;
 
-  startCountdown(3);
+    // Request sync from all members and share the current page URL
+    ws.send(
+      JSON.stringify({
+        type: "requestSync",
+        roomCode: roomCode,
+        userName: userName,
+        url: currentUrl,
+      }),
+    );
+  });
 }
 
 async function leaveRoom() {
@@ -263,6 +305,14 @@ async function broadcastToTabs(message) {
     chrome.tabs.sendMessage(tab.id, message).catch(() => {
       // Tab might not have content script
     });
+  });
+}
+
+function navigateToUrl(url) {
+  if (!url) return;
+  broadcastToTabs({
+    action: "navigate",
+    url: url,
   });
 }
 

@@ -4,15 +4,15 @@ let syncTolerance = 0.5; // seconds of difference before syncing
 
 // Find video element on page
 function findVideoElement() {
-  if (videoElement) return videoElement;
+  if (videoElement && document.contains(videoElement)) return videoElement;
+
+  videoElement = null;
 
   // Try common video containers
   const selectors = [
     "video",
     "video[controls]",
     ".video-player video",
-    'iframe[src*="youtube"]',
-    'iframe[src*="vimeo"]',
     "[data-video]",
   ];
 
@@ -26,6 +26,8 @@ function findVideoElement() {
 
   return null;
 }
+
+let roomUrl = null; // Track the room's locked URL
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -75,6 +77,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     case "startCountdown":
       showCountdown(request.duration);
+      sendResponse({ success: true });
+      break;
+
+    case "navigate":
+      if (request.url && window.location.href !== request.url) {
+        roomUrl = request.url; // Lock to this URL
+        window.location.href = request.url;
+      }
       sendResponse({ success: true });
       break;
 
@@ -176,6 +186,24 @@ const observer = new MutationObserver(() => {
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
+
+// Monitor URL changes and room membership
+let lastUrl = window.location.href;
+setInterval(() => {
+  const currentUrl = window.location.href;
+
+  // If user navigated away from room URL, notify extension
+  if (roomUrl && currentUrl !== roomUrl) {
+    console.log("User left room URL, notifying extension");
+    chrome.runtime.sendMessage({
+      action: "leftRoomUrl",
+      roomUrl: roomUrl,
+      currentUrl: currentUrl,
+    }).catch(() => {});
+  }
+
+  lastUrl = currentUrl;
+}, 2000); // Check every 2 seconds
 
 function setupVideoListeners(video) {
   // Track manual play/pause to avoid conflicts

@@ -34,21 +34,44 @@ wss.on("connection", (ws) => {
 
         case "userAction":
           if (currentRoom) {
-            broadcastToRoom(
-              currentRoom,
-              {
-                type: message.actionType,
-                userName: currentUser,
-                time: message.time,
-                playing: message.playing,
-              },
-              ws,
-            );
+            let syncType = null;
+            if (message.actionType === "play") syncType = "playSync";
+            if (message.actionType === "pause") syncType = "pauseSync";
+            if (message.actionType === "seek") syncType = "seekSync";
+
+            if (syncType) {
+              currentRoom.videoState = {
+                playing: message.actionType === "play",
+                currentTime: message.time,
+              };
+
+              broadcastToRoom(
+                currentRoom,
+                {
+                  type: syncType,
+                  userName: currentUser,
+                  time: message.time,
+                  playing: message.playing,
+                },
+                ws,
+              );
+            }
           }
           break;
 
         case "requestSync":
           if (currentRoom) {
+            // Lock the room to the current URL if not already set
+            if (!currentRoom.currentUrl) {
+              currentRoom.currentUrl = message.url;
+              console.log(`Room ${currentRoom.code} locked to URL: ${currentRoom.currentUrl}`);
+            }
+
+            broadcastToRoom(currentRoom, {
+              type: "urlSync",
+              url: currentRoom.currentUrl,
+            });
+
             broadcastToRoom(currentRoom, {
               type: "startCountdown",
               initiator: currentUser,
@@ -96,6 +119,7 @@ function handleJoin(ws, message, callback) {
         playing: false,
         currentTime: 0,
       },
+      currentUrl: null,
     };
     rooms.set(roomCode, room);
     console.log(`Room ${roomCode} created`);
@@ -120,6 +144,7 @@ function handleJoin(ws, message, callback) {
       roomCode: roomCode,
       memberCount: room.members.length,
       videoState: room.videoState,
+      roomUrl: room.currentUrl, // Include room URL for immediate navigation
     }),
   );
 
@@ -133,6 +158,16 @@ function handleJoin(ws, message, callback) {
     },
     ws,
   );
+
+  // If the room already has a selected URL, send it to the new joiner.
+  if (room.currentUrl) {
+    ws.send(
+      JSON.stringify({
+        type: "urlSync",
+        url: room.currentUrl,
+      }),
+    );
+  }
 
   // Clean up empty rooms after 1 hour
   if (isCreator) {
