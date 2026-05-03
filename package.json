@@ -1,13 +1,1 @@
-{
-  "name": "sync-watch-backend",
-  "version": "1.0.0",
-  "description": "Backend server for Sync Watch extension",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
-  },
-  "dependencies": {
-    "ws": "^8.13.0"
-  }
-}
+{"name": "sync-watch-backend", "version": "1.0.0", "main": "server.js", "scripts": {"start": "node server.js"}, "dependencies": {"ws": "^8.13.0"}}
