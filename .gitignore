@@ -1,0 +1,27 @@
+node_modules/
+.env
+.DS_Store
+*.log
+dist/
+build/
+.idea/
+.vscode/
+
+# Backend
+backend/node_modules/
+backend/.env
+
+# Extension
+extension/icons/*.png
+!extension/icons/README.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
